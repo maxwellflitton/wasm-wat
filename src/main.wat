@@ -3,6 +3,7 @@
     ;; The function signature for fd_write is:
     ;; (File Descriptor, *iovs, iovs_len, *nwritten) -> Returns 0 on success, nonzero on error
     (import "wasi_snapshot_preview1" "fd_write" (func $fd_write (param i32 i32 i32 i32) (result i32)))
+    (import "utils_add" "utils_add_add" (func $imported_add (param i32 i32) (result i32)))
 
     (memory 1)
     (export "memory" (memory 0))
@@ -27,6 +28,13 @@
             (i32.const 1) ;; iovs_len - We're printing 1 string stored in an iov - so one.
             (i32.const 20) ;; nwritten - A place in memory to store the number of bytes written
         )
-        drop ;; Discard the number of bytes written from the top of the stack
+        drop ;; Discard the result of fd_write
+
+        ;; Call the imported add function and drop its result
+        (call $imported_add
+            (i32.const 1)
+            (i32.const 2)
+        )
+        drop ;; Discard the result of the add function
     )
 )
