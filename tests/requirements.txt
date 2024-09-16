@@ -1,0 +1,2 @@
+importlib_resources==6.4.5
+wasmtime==24.0.0

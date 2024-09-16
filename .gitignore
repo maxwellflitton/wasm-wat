@@ -1,2 +1,7 @@
 *.wasm
 *.log
+build/
+
+venv/
+__pycache__/
+.idea/

@@ -9,16 +9,20 @@ cd ..
 # refresh the build directory
 rm -rf build
 mkdir build
+mkdir build/mem
+mkdir build/utils
+mkdir build/vars
+mkdir build/vars/collections
 
 # compile the individual modules
 wat2wasm src/main.wat -o build/main.wasm
-wat2wasm src/utils/add.wat -o build/add.wasm
-wat2wasm src/mem/malloc.wat -o build/malloc.wasm
+wat2wasm src/utils/add.wat -o build/utils/add.wasm
+wat2wasm src/mem/malloc.wat -o build/mem/malloc.wasm
 
 # merge the modules
 wasm-merge \
-build/add.wasm utils_add \
-build/malloc.wasm mem_malloc \
+build/utils/add.wasm utils_add \
+build/mem/malloc.wasm mem_malloc \
 build/main.wasm main \
 -o build/merged.wasm \
 --enable-multimemory \
