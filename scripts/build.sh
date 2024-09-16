@@ -15,3 +15,7 @@ mkdir build
 # cat src/main.wat >> ./build/build.wat
 # wat2wasm build/build.wat -o build/main.wasm
 wasm-merge src/main.wat src/utils/add.wat -o build/merge.wasm
+wat2wasm src/main.wat -o build/main.wasm
+wat2wasm src/utils/add.wat -o build/add.wasm
+
+wasmtime build/main.wasm --preload build/add.wasm
