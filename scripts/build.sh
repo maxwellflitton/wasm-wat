@@ -28,5 +28,5 @@ build/main.wasm main \
 --enable-multimemory \
 > build/build.log
 
-# # run the merged module
+# run the merged module
 wasmtime build/merged.wasm

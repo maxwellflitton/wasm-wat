@@ -14,6 +14,11 @@
     ;; Offset 4-7: Used to store the length (iov_len)
     (data (i32.const 8) "hello world\n")
 
+    ;; Function to convert an integer (ASCII value) to a character and store it in memory
+    (func $store_char (param $char i32) (param $offset i32)
+        (i32.store8 (local.get $offset) (local.get $char))
+    )
+
     (func $main (export "_start")
         ;; Creating a new io vector within linear memory
         ;; iovec is input/output vector which can have read and write functions
@@ -36,5 +41,26 @@
             (i32.const 2)
         )
         drop ;; Discard the result of the add function
+
+        ;; Storing three ASCII characters ('A' = 65, 'B' = 66, 'C' = 67)
+        (call $store_char (i32.const 65) (i32.const 8)) ;; Store 'A' at memory offset 8
+        (call $store_char (i32.const 66) (i32.const 9)) ;; Store 'B' at memory offset 9
+        (call $store_char (i32.const 67) (i32.const 10)) ;; Store 'C' at memory offset 10
+
+        ;; Store newline character '\n' at memory offset 11
+        (call $store_char (i32.const 10) (i32.const 11)) ;; Store '\n' at memory offset 11
+
+        ;; Creating a new io vector within linear memory for the ABC\n string
+        (i32.store (i32.const 0) (i32.const 8))  ;; iov.iov_base - pointer to start of "ABC\n"
+        (i32.store (i32.const 4) (i32.const 4))  ;; iov.iov_len - length of "ABC\n"
+
+        ;; Print the "ABC\n" string
+        (call $fd_write
+            (i32.const 1) ;; file_descriptor - 1 for stdout
+            (i32.const 0) ;; *iovs - pointer to the iov array, stored at memory location 0
+            (i32.const 1) ;; iovs_len - 1 string stored in an iov
+            (i32.const 20) ;; nwritten - a place in memory to store the number of bytes written
+        )
+        drop ;; Discard the result of fd_write
     )
 )
