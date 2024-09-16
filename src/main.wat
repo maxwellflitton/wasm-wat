@@ -1,4 +1,4 @@
-(module
+(module $main
     ;; Import the required fd_write WASI function which will write the given io vectors to stdout
     ;; The function signature for fd_write is:
     ;; (File Descriptor, *iovs, iovs_len, *nwritten) -> Returns 0 on success, nonzero on error
