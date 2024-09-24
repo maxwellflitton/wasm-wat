@@ -5,8 +5,18 @@
 
   ;; Global variable to keep track of the next free memory address
   (global $first_free (mut i32) (i32.const 0)) ;; starts at 0
-  (global $first_freed (mut i32) (i32.const 0)) ;; starts at 0
-  (global $last_freed (mut i32) (i32.const 0)) ;; starts at 0
+  (global $first_freed (mut i32) (i32.const -1)) ;; starts at 0
+  (global $last_freed (mut i32) (i32.const -1)) ;; starts at 0
+
+
+  ;; ================================ To Do =================================
+
+  ;; [X] implement the free function
+  ;; [] implement the copy data over function
+  ;; [] implement the realloc function
+  ;; [] build branch on malloc of existing memory block
+
+  ;; ====================== Header extraction functions ======================
 
   ;; Checking to see if the memory is free
   ;; param: ptr (i32) => the pointer to the memory block
@@ -34,6 +44,65 @@
     i32.load
   )
 
+  ;; ====================== Private Header Functions ========================
+
+
+  ;; Writes the pointer to the next free memory block in the current header.
+  ;; param: ptr (i32) => the pointer to the memory block
+  ;; param: next_free (i32) => the pointer to the next free memory block
+  (func $set_next_free_mem (param $ptr i32) (param $next_free i32)
+    local.get $ptr
+    call $get_next_free_mem
+    local.get $next_free
+    i32.store
+  )
+
+  ;; ====================== Memory allocation functions ======================
+
+  ;; Assigns a fresh memory block.
+  ;; param: size (i32) => the size of the memory block to allocate
+  ;; result: i32 => the pointer to the allocated memory block
+  (func $assign_fresh_memory(param $size i32) (result i32)
+    (local $current_free i32)      ;; Local variable to hold the current free address
+    (local $cached_free i32)       ;; Local variable to hold the current free address
+
+    global.get $first_free
+    local.set $current_free
+    global.get $first_free
+    local.set $cached_free
+
+    ;; we need to assign the pointers to memory
+    local.get $current_free       ;; Get the saved address
+    i32.const 1                   ;; load the constant 1 onto the stack to denote the mem is used
+    i32.store
+    ;; increase the pointer
+    local.get $current_free
+    i32.const 4
+    i32.add
+    local.set $current_free
+
+    ;; assign the pointer to the next free memory
+    local.get $current_free        ;; Get the saved address
+    i32.const -1                   ;; we know this is fresh memory so the next pointer is -1
+    i32.store
+    ;; increase the pointer
+    local.get $current_free
+    i32.const 4
+    i32.add 
+    local.set $current_free
+
+    local.get $current_free       ;; Get the saved address
+    local.get $size               ;; Get the size parameter
+    i32.store                     ;; Store the size in the memory
+
+    local.get $current_free       ;; Get the saved address
+    local.get $size               ;; Get the size parameter
+    i32.add                       ;; Add the two values (current $first_free + size) ? returns the result
+
+    global.set $first_free        ;; Update $first_free with the new value
+    local.get $cached_free        ;; Return the current free address (start of allocated block)
+  )
+
   ;; write function on storing header pointer
 
   ;; Function to allocate memory (malloc)
@@ -42,44 +111,11 @@
     (local $cached_free i32)       ;; Local variable to hold the current free address
 
     global.get $first_freed         ;; check to see if there is any freed memory
-    i32.const 0                     ;; Load the constant 0 onto the stack
+    i32.const -1                    ;; Load the constant -1 onto the stack
     i32.eq                          ;; Compare if $first_freed == 0
     if (result i32)                 ;; If true (no freed memory), branch to false
-      global.get $first_free
-      local.set $current_free
-      global.get $first_free
-      local.set $cached_free
-
-      ;; we need to assign the pointers to memory
-      local.get $current_free       ;; Get the saved address
-      i32.const 1                   ;; load the constant 1 onto the stack to denote the mem is used
-      i32.store
-      ;; increase the pointer
-      local.get $current_free
-      i32.const 4
-      i32.add
-      local.set $current_free
-
-      ;; assign the pointer to the next free memory
-      local.get $current_free       ;; Get the saved address
-      i32.const -1                   ;; we know this is fresh memory so the next pointer is -1
-      i32.store
-      ;; increase the pointer
-      local.get $current_free
-      i32.const 4
-      i32.add 
-      local.set $current_free
-
-      local.get $current_free       ;; Get the saved address
       local.get $size               ;; Get the size parameter
-      i32.store                     ;; Store the size in the memory
-
-      local.get $current_free       ;; Get the saved address
-      local.get $size               ;; Get the size parameter
-      i32.add                       ;; Add the two values (current $first_free + size) ? returns the result
-
-      global.set $first_free        ;; Update $first_free with the new value
-      local.get $cached_free        ;; Return the current free address (start of allocated block)
+      call $assign_fresh_memory     ;; Call the assign_fresh_memory function
     else
       ;; If there is freed memory, return -1
       i32.const -1
@@ -88,9 +124,26 @@
 
   ;; Function to free memory (no-op in this simple implementation)
   (func $free (param $ptr i32)
-    ;; In a real implementation, this would mark the memory at $ptr as free.
-    ;; Here, it's just a placeholder.
-    nop
+    ;; check if the first free memory is -1 => no freed memory => assign the pointer to the first and last freed memory
+    global.get $first_freed
+    i32.const -1
+    i32.eq
+    ;; ensure that there are not variables on the stack at the end of the if else block
+    if                              ;; There is no freed memory
+      local.get $ptr                ;; set the freed pointers to this
+      global.set $first_freed
+      local.get $ptr
+      global.set $last_freed
+    else                            ;; There is freed memory => append to the last freed memory
+      global.get $last_freed
+      local.get $ptr
+      call $set_next_free_mem
+      local.get $ptr
+      global.set $last_freed
+    end
+    local.get $ptr                ;; Get the pointer to 0 to denote it can be used
+    i32.const 0
+    i32.store
   )
 
   ;; Export the malloc and free functions

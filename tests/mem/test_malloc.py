@@ -16,16 +16,15 @@ class TestAdd(TestCase):
         self.module = Module.from_file(self.store.engine, self.module_path)
         self.instance = Instance(self.store, self.module, [])
 
-    def test_malloc(self):
+    def test_basic_malloc(self):
         malloc = self.instance.exports(self.store)["malloc"]
         outcome = malloc(self.store, 20)
-        print(outcome)
+        self.assertEqual(0, outcome)
 
         # Access the exported memory
         memory = self.instance.exports(self.store)["malloc_memory"]
 
         # Inspect the memory around the allocated block
-        address = outcome
         allocated_block = memory.data_ptr(self.store)[0:12]
 
         # Print the memory contents as a list of integers
@@ -36,20 +35,19 @@ class TestAdd(TestCase):
         print(f'Header value at allocated address: {list(header_value)}')
 
         is_mem_free = self.instance.exports(self.store)["is_mem_free"]
-        test = is_mem_free(self.store, 0)
-        print(test)
+        is_mem_free = is_mem_free(self.store, 0)
+        self.assertEqual(1, is_mem_free)
 
         get_next_free_mem = self.instance.exports(self.store)["get_next_free_mem"]
-        test = get_next_free_mem(self.store, 0)
-        print(test)
+        get_next_free_mem = get_next_free_mem(self.store, 0)
+        self.assertEqual(-1, get_next_free_mem)
 
         get_mem_length = self.instance.exports(self.store)["get_mem_length"]
-        test = get_mem_length(self.store, 0)
-        print(test)
+        get_mem_length = get_mem_length(self.store, 0)
+        self.assertEqual(20, get_mem_length)
 
         outcome = malloc(self.store, 20)
-        print(outcome)
-
+        self.assertEqual(28, outcome)
         # # Alternatively, you can access memory as bytearray
         # byte_array = memory.data(self.store)
         # print(f'Full memory as bytearray: {byte_array[:64]}')  # Display first 64 bytes
