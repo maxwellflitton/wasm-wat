@@ -62,5 +62,5 @@
             (i32.const 20) ;; nwritten - a place in memory to store the number of bytes written
         )
         drop ;; Discard the result of fd_write
-    )
+  )
 )
