@@ -16,6 +16,26 @@ class TestAdd(TestCase):
         self.module = Module.from_file(self.store.engine, self.module_path)
         self.instance = Instance(self.store, self.module, [])
 
+    def print_mem(self):
+        grid = self.get_mem_grid()
+        print("")
+        for i in grid:
+            print(i)
+
+    def get_mem_grid(self):
+        memory = self.instance.exports(self.store)["malloc_memory"]
+        total = 28 * 8
+        # Inspect the memory around the allocated block
+        allocated_block = memory.data_ptr(self.store)[0:total]
+        grid = []
+        start = 0
+        end = len(allocated_block)
+        step = 28
+        for i in range(start, end, step):
+            x = i
+            grid.append(allocated_block[x:x + step])
+        return grid
+
     def test_basic_malloc(self):
         malloc = self.instance.exports(self.store)["malloc"]
         outcome = malloc(self.store, 20)
@@ -48,13 +68,148 @@ class TestAdd(TestCase):
 
         outcome = malloc(self.store, 20)
         self.assertEqual(28, outcome)
-        # # Alternatively, you can access memory as bytearray
-        # byte_array = memory.data(self.store)
-        # print(f'Full memory as bytearray: {byte_array[:64]}')  # Display first 64 bytes
-        # # self.assertEqual(32, outcome)
-        #
-        # # outcome = malloc(self.store, 20)
-        # # print(outcome)
+
+    def test_basic_free(self):
+        malloc = self.instance.exports(self.store)["malloc"]
+        one = malloc(self.store, 20)
+        two = malloc(self.store, 20)
+        three = malloc(self.store, 20)
+        four = malloc(self.store, 20)
+        five = malloc(self.store, 20)
+        six = malloc(self.store, 20)
+        seven = malloc(self.store, 20)
+        eight = malloc(self.store, 20)
+
+        self.print_mem()
+
+        self.assertEqual(28, two)
+        self.assertEqual(84, four)
+        self.assertEqual(168, seven)
+        self.assertEqual(196, eight)
+
+        free_func = self.instance.exports(self.store)["free"]
+        free_func(self.store, two)
+        self.print_mem()
+
+        free_func(self.store, four)
+        self.print_mem()
+
+        free_func(self.store, seven)
+        self.print_mem()
+
+        free_func(self.store, eight)
+        mem_grid = self.get_mem_grid()
+        expected_grid = [
+            [1, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 84, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [1, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 168, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [1, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [1, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 196, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ]
+        self.assertEqual(
+            expected_grid,
+            mem_grid
+        )
+
+    def test_malloc_existing(self):
+        # define a range of memory allocations
+        malloc = self.instance.exports(self.store)["malloc"]
+        one = malloc(self.store, 20)  # 0 => 28 => 20
+        two = malloc(self.store, 5)  # 28 => 41 => 5
+        three = malloc(self.store, 20)  # 41 => 69 => 20
+        four = malloc(self.store, 20)  # 69 => 97 => 20
+        five = malloc(self.store, 3)  # 97 => 108 => 3
+        six = malloc(self.store, 20)  # 108 => 136 => 20
+        seven = malloc(self.store, 8)  # 136 => 152 => 8
+        eight = malloc(self.store, 20)  # 152 => 180 => 20
+        nine = malloc(self.store, 20)  # 180 => 208 => 20
+
+        # assert that the start of the blocks make sense
+        self.assertEqual(0, one)
+        self.assertEqual(28, two)
+        self.assertEqual(41, three)
+        self.assertEqual(69, four)
+        self.assertEqual(97, five)
+        self.assertEqual(108, six)
+        self.assertEqual(136, seven)
+        self.assertEqual(152, eight)
+        self.assertEqual(180, nine)
+
+        # assert that the memory block is as expected
+        memory = self.instance.exports(self.store)["malloc_memory"]
+        allocated_block = memory.data_ptr(self.store)[0:nine + 28]
+        allocated_block = [
+            allocated_block[one:two],
+            allocated_block[two:three],
+            allocated_block[three:four],
+            allocated_block[four:five],
+            allocated_block[five:six],
+            allocated_block[six:seven],
+            allocated_block[seven:eight],
+            allocated_block[eight:nine],
+            allocated_block[nine: nine + 28]
+        ]
+        expected_block = [
+            [1, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [1, 0, 0, 0, 255, 255, 255, 255, 5, 0, 0, 0, 0],
+            [1, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [1, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [1, 0, 0, 0, 255, 255, 255, 255, 3, 0, 0],
+            [1, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [1, 0, 0, 0, 255, 255, 255, 255, 8, 0, 0, 0, 0, 0, 0, 0],
+            [1, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [1, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ]
+        self.assertEqual(
+            expected_block,
+            allocated_block
+        )
+
+        free_func = self.instance.exports(self.store)["free"]
+        free_func(self.store, two)
+        free_func(self.store, four)
+        free_func(self.store, five)
+        free_func(self.store, seven)
+        free_func(self.store, nine)
+        free_func(self.store, one)
+
+        memory = self.instance.exports(self.store)["malloc_memory"]
+        allocated_block = memory.data_ptr(self.store)[0:nine + 28]
+
+        expected_block = [
+            [0, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 69, 0, 0, 0, 5, 0, 0, 0, 0],
+            [1, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 97, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 136, 0, 0, 0, 3, 0, 0],
+            [1, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 180, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0],
+            [1, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ]
+        allocated_block = [
+            allocated_block[one:two],
+            allocated_block[two:three],
+            allocated_block[three:four],
+            allocated_block[four:five],
+            allocated_block[five:six],
+            allocated_block[six:seven],
+            allocated_block[seven:eight],
+            allocated_block[eight:nine],
+            allocated_block[nine: nine + 28]
+        ]
+        self.assertEqual(
+            expected_block,
+            allocated_block
+        )
+
+        # first realloc is going to be seven with a size of 8
+        outcome = malloc(self.store, 8)
+        print(outcome)
+
 
 
 if __name__ == '__main__':

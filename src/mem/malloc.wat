@@ -9,6 +9,9 @@
   (global $last_freed (mut i32) (i32.const -1)) ;; starts at 0
 
 
+  ;; header structure | ? free | ? next free | ? length |
+
+
   ;; ================================ To Do =================================
 
   ;; [X] implement the free function
@@ -36,7 +39,9 @@
     i32.load
   )
 
-  ;; write a function for getting the length of the memory block
+  ;; Gets the length of the memory block.
+  ;; param: ptr (i32) => the pointer to the memory block
+  ;; result: i32 => the length of the memory block
   (func $get_mem_length (param $ptr i32) (result i32)
     local.get $ptr
     i32.const 8
@@ -52,7 +57,8 @@
   ;; param: next_free (i32) => the pointer to the next free memory block
   (func $set_next_free_mem (param $ptr i32) (param $next_free i32)
     local.get $ptr
-    call $get_next_free_mem
+    i32.const 4
+    i32.add
     local.get $next_free
     i32.store
   )
@@ -113,17 +119,63 @@
     global.get $first_freed         ;; check to see if there is any freed memory
     i32.const -1                    ;; Load the constant -1 onto the stack
     i32.eq                          ;; Compare if $first_freed == 0
-    if (result i32)                 ;; If true (no freed memory), branch to false
+    if                              ;; If true (no freed memory), branch to false
       local.get $size               ;; Get the size parameter
       call $assign_fresh_memory     ;; Call the assign_fresh_memory function
+      local.set $cached_free
     else
-      ;; If there is freed memory, return -1
-      i32.const -1
+      global.get $first_freed
+      call $get_mem_length
+      local.get $size
+      i32.ge_u
+      if
+        ;; we have enough memory on the first go
+      else
+        ;; we need to look for next free mem
+        global.get $first_freed
+        call $get_next_free_mem
+        local.set $cached_free
+        ;; this is where we loop
+      end
     end
-  )
+    local.get $cached_free
+)
+    ;; if (result i32)               ;; the (result i32) means that we expect an i32 on the stack 
+    ;;   global.get $first_freed     ;; at the end of the conditional checking
+    ;; else
+    ;;   ;; here is where we find the memory block that is big enough
+    ;;   global.get $first_freed
+    ;;   call $get_next_free_mem
+    ;;   local.set $cached_free
+    ;;   local.get $cached_free
+    ;; end
+        ;; (loop $free_check
+        ;;   ;; TODO => check it out of brounds and request more memory
+        ;;   ;; local.get $cached_free
+        ;;   ;; call $get_mem_length        ;; check the length of the next free
+        ;;   ;; local.get $size
+        ;;   i32.const 10
+        ;;   i32.const 5
+        ;;   i32.ge_u
+        ;;   if
+        ;;     i32.const 1
+        ;;     local.set $cached_free
+        ;;     br $free_check                      ;; this means that the $cached_free have enough mem
+        ;;   else
+        ;;     i32.const 2
+        ;;     local.set $cached_free
+        ;;     ;; local.get $cached_free    ;; here we get the next free mem and assign it to $cached_free
+        ;;     ;; call $get_next_free_mem
+        ;;     ;; local.set $cached_free
+        ;;     br $free_check 
+        ;;   end
+        ;; )
+        ;; TODO => reallocate the mem links (might need a trailing cached ptr)
+        ;; local.get $cached_free
+  ;; )
 
   ;; Function to free memory (no-op in this simple implementation)
-  (func $free (param $ptr i32)
+  (func $free (param $ptr i32) (result i32)
     ;; check if the first free memory is -1 => no freed memory => assign the pointer to the first and last freed memory
     global.get $first_freed
     i32.const -1
@@ -144,9 +196,11 @@
     local.get $ptr                ;; Get the pointer to 0 to denote it can be used
     i32.const 0
     i32.store
+    global.get $last_freed
   )
 
   ;; Export the malloc and free functions
+  (export "set_next_free_mem" (func $set_next_free_mem))
   (export "malloc" (func $malloc))
   (export "free" (func $free))
   (export "is_mem_free" (func $is_mem_free))
