@@ -169,12 +169,12 @@ class TestAdd(TestCase):
         )
 
         free_func = self.instance.exports(self.store)["free"]
-        free_func(self.store, two)
-        free_func(self.store, four)
-        free_func(self.store, five)
-        free_func(self.store, seven)
-        free_func(self.store, nine)
-        free_func(self.store, one)
+        free_func(self.store, two)     # ptr => 28 : size => 5
+        free_func(self.store, four)    # ptr => 69 : size => 20
+        free_func(self.store, five)    # ptr => 97 : size => 3
+        free_func(self.store, seven)   # ptr => 136: size => 8
+        free_func(self.store, nine)    # ptr => 180: size => 20
+        free_func(self.store, one)     # ptr => 0  : size => 20
 
         memory = self.instance.exports(self.store)["malloc_memory"]
         allocated_block = memory.data_ptr(self.store)[0:nine + 28]
@@ -207,7 +207,7 @@ class TestAdd(TestCase):
         )
 
         # first realloc is going to be seven with a size of 8
-        outcome = malloc(self.store, 8)
+        outcome = malloc(self.store, 80)
         print(outcome)
 
 

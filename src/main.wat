@@ -62,5 +62,16 @@
             (i32.const 20) ;; nwritten - a place in memory to store the number of bytes written
         )
         drop ;; Discard the result of fd_write
+
+        ;; This is a check loop
+        (loop $free_check
+          i32.const 5
+          i32.const 10
+          i32.ge_u
+          if
+            br 1
+          else
+          end
+        )
   )
 )
