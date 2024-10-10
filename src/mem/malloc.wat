@@ -49,6 +49,16 @@
     i32.load
   )
 
+  (func $get_first_freed (result i32)
+    global.get $first_freed
+  )
+
+  (func $is_greater_than (param $one i32) (param $two i32) (result i32)
+    local.get $one 
+    local.get $two 
+    i32.ge_u
+  )
+
   ;; ====================== Private Header Functions ========================
 
 
@@ -130,38 +140,59 @@
       i32.ge_u
       if
         ;; we have enough memory on the first go
+        global.get $first_freed
+        local.set $cached_free
+        local.get $cached_free
+        call $get_next_free_mem
+        global.set $first_freed
       else
         ;; we need to look for next free mem
+        ;; move to next ptr for cached_free
         global.get $first_freed
         call $get_next_free_mem
-        local.set $cached_free
+        local.set $cached_free ;; now at 69
 
         ;; this is where we loop to check the (maybe break this out into a scan function)
-        (loop $free_check
-          local.get $cached_free
-          call $get_next_free_mem
-          i32.const -1
-          i32.eq
-          if
-            ;; there is no free mem left => $assign_fresh_memory => break
-            local.get $size
-            call $assign_fresh_memory
-            local.set $cached_free
-            br 1
-          else
-            ;; check the free mem
-            local.get $cached_free
-            call $get_mem_length
-            local.get $size
-            i32.ge_u
-            if
-              ;; we can realloc mem
-              br 1
-            else
-              ;; we need to loop again
-            end
-          end
-        )
+        ;; (loop $free_check
+        ;;   local.get $cached_free
+        ;;   call $get_mem_length
+        ;;   local.get $size
+        ;;   i32.ge_u
+        ;;   if
+        ;;     ;; we have enough mem
+        ;;     br 1
+        ;;   else
+        ;;     ;; move to the next ptr
+        ;;     local.get $cached_free
+        ;;     call $get_next_free_mem
+        ;;     local.set $cached_free
+        ;;     br 1
+        ;;   end
+        ;;   ;; ;; check to see if there is no next free mem
+        ;;   ;; local.get $cached_free
+        ;;   ;; call $get_next_free_mem
+        ;;   ;; i32.const -1
+        ;;   ;; i32.eq
+        ;;   ;; if
+        ;;   ;;   ;; there is no free mem left => $assign_fresh_memory => break
+        ;;   ;;   local.get $size
+        ;;   ;;   call $assign_fresh_memory
+        ;;   ;;   local.set $cached_free
+        ;;   ;;   br 1
+        ;;   ;; else
+        ;;   ;;   ;; check the free mem
+        ;;   ;;   local.get $size
+        ;;   ;;   local.get $cached_free
+        ;;   ;;   call $get_mem_length
+        ;;   ;;   i32.ge_u
+        ;;   ;;   if
+        ;;   ;;     ;; we can realloc mem
+        ;;   ;;     br 1
+        ;;   ;;   else
+        ;;   ;;     ;; we need to loop again
+        ;;   ;;   end
+        ;;   ;; end
+        ;; )
       end
     end
     local.get $cached_free
@@ -199,4 +230,6 @@
   (export "is_mem_free" (func $is_mem_free))
   (export "get_next_free_mem" (func $get_next_free_mem))
   (export "get_mem_length" (func $get_mem_length))
+  (export "get_first_freed" (func $get_first_freed))
+  (export "is_greater_than" (func $is_greater_than))
 )

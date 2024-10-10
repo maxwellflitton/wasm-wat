@@ -2,6 +2,7 @@ import os
 from unittest import TestCase, main
 
 from wasmtime import Store, Module, Instance
+from wasm_testing.memory_profiler.memory_block import MemoryBlock
 
 
 class TestAdd(TestCase):
@@ -206,9 +207,20 @@ class TestAdd(TestCase):
             allocated_block
         )
 
-        # first realloc is going to be seven with a size of 8
-        outcome = malloc(self.store, 80)
-        print(outcome)
+        memory = self.instance.exports(self.store)["malloc_memory"]
+        memory_page = memory.data_ptr(self.store)[0:64000]
+        print(allocated_block)
+        block = MemoryBlock(memory_page, 0)
+        print(block.check_free(memory_page[three:four]))
+
+        # # first realloc is going to be seven with a size of 8
+        # outcome = malloc(self.store, 1)
+        # print("here is the first realloc: ", outcome)
+        # get_first_freed = self.instance.exports(self.store)["get_first_freed"]
+        # print(get_first_freed(self.store))
+        #
+        # is_greater_than = self.instance.exports(self.store)["is_greater_than"]
+        # print(is_greater_than(self.store, 4, 3))
 
 
 
