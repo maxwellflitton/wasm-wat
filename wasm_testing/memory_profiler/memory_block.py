@@ -5,7 +5,16 @@ from typing import List, Optional
 
 
 class MemoryBlock:
+    """
+    A block of memory in the page
 
+    Attributes:
+        ptr: a pointer to where the memory block is in the page
+        free: a boolean indicating if the memory block is free
+        next_free_ptr: a pointer to the next free memory block
+        size: the size of the data section of the memory block
+        data: the data section of the memory block
+    """
     def __init__(self, memory: List[int], ptr: int) -> None:
         """
         The constructor for the MemoryBlock.
@@ -47,10 +56,10 @@ class MemoryBlock:
     @staticmethod
     def check_free(memory: List[int]) -> bool:
         """
+        Checks if the memory block is free.
 
-
-        :param memory:
-        :return:
+        :param memory: the memory block to check
+        :return: a boolean indicating if the memory block is free
         """
         integer_value = MemoryBlock.extract_unsigned_integer(memory[0:4])
         if integer_value == 0:

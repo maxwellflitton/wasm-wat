@@ -9,7 +9,7 @@
   (global $last_freed (mut i32) (i32.const -1)) ;; means that there is no last freed
 
 
-  ;; header structure | ? free | ? next free | ? length | data |
+  ;; header structure | ? free | ? next free | length | data |
 
 
   ;; ================================ To Do =================================
@@ -214,7 +214,7 @@
     local.get $cached_free
   )
 
-  ;; Function to free memory (no-op in this simple implementation)
+  ;; Function to free memory.
   (func $free (param $ptr i32) (result i32)
     ;; check if the first free memory is -1 => no freed memory => assign the pointer to the first and last freed memory
     global.get $first_freed

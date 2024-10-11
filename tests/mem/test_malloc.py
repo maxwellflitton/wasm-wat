@@ -2,7 +2,9 @@ import os
 from unittest import TestCase, main
 
 from wasmtime import Store, Module, Instance
+
 from wasm_testing.memory_profiler.memory_block import MemoryBlock
+from wasm_testing.memory_profiler.profiler import MemoryProfiler
 
 
 class TestAdd(TestCase):
@@ -17,26 +19,6 @@ class TestAdd(TestCase):
         self.module = Module.from_file(self.store.engine, self.module_path)
         self.instance = Instance(self.store, self.module, [])
 
-    def print_mem(self):
-        grid = self.get_mem_grid()
-        print("")
-        for i in grid:
-            print(i)
-
-    def get_mem_grid(self):
-        memory = self.instance.exports(self.store)["malloc_memory"]
-        total = 28 * 8
-        # Inspect the memory around the allocated block
-        allocated_block = memory.data_ptr(self.store)[0:total]
-        grid = []
-        start = 0
-        end = len(allocated_block)
-        step = 28
-        for i in range(start, end, step):
-            x = i
-            grid.append(allocated_block[x:x + step])
-        return grid
-
     def test_basic_malloc(self):
         malloc = self.instance.exports(self.store)["malloc"]
         outcome = malloc(self.store, 20)
@@ -44,16 +26,16 @@ class TestAdd(TestCase):
 
         # Access the exported memory
         memory = self.instance.exports(self.store)["malloc_memory"]
+        mem_profiler = MemoryProfiler(raw_memory=memory.data_ptr(self.store)[0:64000])
 
-        # Inspect the memory around the allocated block
-        allocated_block = memory.data_ptr(self.store)[0:12]
+        # Inspect the memory
+        self.assertEqual(1, len(mem_profiler.memory_blocks))
 
-        # Print the memory contents as a list of integers
-        print(f'Allocated memory block: {list(allocated_block)}')
-
-        # Inspect the first 4 bytes of the allocated memory for example
-        header_value = memory.data_ptr(self.store)[0:12]
-        print(f'Header value at allocated address: {list(header_value)}')
+        self.assertEqual(0, mem_profiler.memory_blocks[0].ptr)
+        self.assertEqual(False, mem_profiler.memory_blocks[0].free)
+        self.assertEqual(20, mem_profiler.memory_blocks[0].size)
+        self.assertEqual(None, mem_profiler.memory_blocks[0].next_free_ptr)
+        self.assertEqual([0] * 20, mem_profiler.memory_blocks[0].data)
 
         is_mem_free = self.instance.exports(self.store)["is_mem_free"]
         is_mem_free = is_mem_free(self.store, 0)
@@ -67,8 +49,29 @@ class TestAdd(TestCase):
         get_mem_length = get_mem_length(self.store, 0)
         self.assertEqual(20, get_mem_length)
 
-        outcome = malloc(self.store, 20)
-        self.assertEqual(28, outcome)
+        outcome = malloc(self.store, 5)
+        self.assertEqual(32, outcome)
+
+        # Access the exported memory
+        memory = self.instance.exports(self.store)["malloc_memory"]
+        mem_profiler = MemoryProfiler(raw_memory=memory.data_ptr(self.store)[0:64000])
+
+        # Inspect the memory
+        self.assertEqual(2, len(mem_profiler.memory_blocks))
+
+        # assert that the first block is still the same
+        self.assertEqual(0, mem_profiler.memory_blocks[0].ptr)
+        self.assertEqual(False, mem_profiler.memory_blocks[0].free)
+        self.assertEqual(20, mem_profiler.memory_blocks[0].size)
+        self.assertEqual(None, mem_profiler.memory_blocks[0].next_free_ptr)
+        self.assertEqual([0] * 20, mem_profiler.memory_blocks[0].data)
+
+        # assert that the second block is as expected
+        self.assertEqual(32, mem_profiler.memory_blocks[1].ptr)
+        self.assertEqual(False, mem_profiler.memory_blocks[1].free)
+        self.assertEqual(5, mem_profiler.memory_blocks[1].size)
+        self.assertEqual(None, mem_profiler.memory_blocks[1].next_free_ptr)
+        self.assertEqual([0] * 5, mem_profiler.memory_blocks[1].data)
 
     def test_basic_free(self):
         malloc = self.instance.exports(self.store)["malloc"]
