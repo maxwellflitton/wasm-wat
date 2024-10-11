@@ -5,11 +5,11 @@
 
   ;; Global variable to keep track of the next free memory address
   (global $first_free (mut i32) (i32.const 0)) ;; starts at 0
-  (global $first_freed (mut i32) (i32.const -1)) ;; starts at 0
-  (global $last_freed (mut i32) (i32.const -1)) ;; starts at 0
+  (global $first_freed (mut i32) (i32.const -1)) ;; means that there is no first freed
+  (global $last_freed (mut i32) (i32.const -1)) ;; means that there is no last freed
 
 
-  ;; header structure | ? free | ? next free | ? length |
+  ;; header structure | ? free | ? next free | ? length | data |
 
 
   ;; ================================ To Do =================================
@@ -73,6 +73,14 @@
     i32.store
   )
 
+
+  ;; ====================== Private Pointer Functions =======================
+
+
+;;  (func $increase_pointer_by_one)
+
+
+
   ;; ====================== Memory allocation functions ======================
 
   ;; Assigns a fresh memory block.
@@ -92,6 +100,7 @@
     local.get $current_free       ;; Get the saved address
     i32.const 1                   ;; load the constant 1 onto the stack to denote the mem is used
     i32.store
+
     ;; increase the pointer
     local.get $current_free
     i32.const 4
@@ -102,6 +111,7 @@
     local.get $current_free        ;; Get the saved address
     i32.const -1                   ;; we know this is fresh memory so the next pointer is -1
     i32.store
+
     ;; increase the pointer
     local.get $current_free
     i32.const 4
@@ -111,6 +121,12 @@
     local.get $current_free       ;; Get the saved address
     local.get $size               ;; Get the size parameter
     i32.store                     ;; Store the size in the memory
+
+    ;; increase the pointer
+    local.get $current_free
+    i32.const 4
+    i32.add
+    local.set $current_free
 
     local.get $current_free       ;; Get the saved address
     local.get $size               ;; Get the size parameter
