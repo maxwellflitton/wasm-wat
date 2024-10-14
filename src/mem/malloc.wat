@@ -49,10 +49,16 @@
     i32.load
   )
 
+  ;; Gets the first freed pointer to the memory block.
+  ;; result: i32 => the pointer to the first freed memory block
   (func $get_first_freed (result i32)
     global.get $first_freed
   )
 
+  ;; Checks if the first value is greater than the second value.
+  ;; param: one (i32) => the first value
+  ;; param: two (i32) => the second value
+  ;; result: i32 => 1 if the first value is greater than the second value, 0 otherwise
   (func $is_greater_than (param $one i32) (param $two i32) (result i32)
     local.get $one 
     local.get $two 
@@ -77,7 +83,7 @@
   ;; ====================== Private Pointer Functions =======================
 
 
-;;  (func $increase_pointer_by_one)
+  ;; TODO => implement the scan function to get a free memory block (relaxed scan and another function for strict scan)
 
 
 

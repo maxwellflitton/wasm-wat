@@ -19,6 +19,23 @@ class TestAdd(TestCase):
         self.module = Module.from_file(self.store.engine, self.module_path)
         self.instance = Instance(self.store, self.module, [])
 
+    def compare_mem_blocks(self, mem_block: MemoryBlock, expected_data: list) -> None:
+        self.assertEqual(mem_block.ptr, expected_data[0])
+        self.assertEqual(mem_block.free, expected_data[1])
+        self.assertEqual(mem_block.size, expected_data[2])
+        self.assertEqual(mem_block.next_free_ptr, expected_data[3])
+        self.assertEqual(mem_block.data, expected_data[4])
+
+    def profile_entire_memory(self, expected_mem: list) -> None:
+        memory = self.instance.exports(self.store)["malloc_memory"]
+        mem_profiler = MemoryProfiler(raw_memory=memory.data_ptr(self.store)[0:64000])
+
+        for i in range(0, len(expected_mem)):
+            self.compare_mem_blocks(
+                mem_block=mem_profiler.memory_blocks[i],
+                expected_data=expected_mem[i]
+            )
+
     def test_basic_malloc(self):
         malloc = self.instance.exports(self.store)["malloc"]
         outcome = malloc(self.store, 20)
@@ -31,11 +48,10 @@ class TestAdd(TestCase):
         # Inspect the memory
         self.assertEqual(1, len(mem_profiler.memory_blocks))
 
-        self.assertEqual(0, mem_profiler.memory_blocks[0].ptr)
-        self.assertEqual(False, mem_profiler.memory_blocks[0].free)
-        self.assertEqual(20, mem_profiler.memory_blocks[0].size)
-        self.assertEqual(None, mem_profiler.memory_blocks[0].next_free_ptr)
-        self.assertEqual([0] * 20, mem_profiler.memory_blocks[0].data)
+        self.compare_mem_blocks(
+            mem_block=mem_profiler.memory_blocks[0],
+            expected_data=[0, False, 20, None, [0] * 20]
+        )
 
         is_mem_free = self.instance.exports(self.store)["is_mem_free"]
         is_mem_free = is_mem_free(self.store, 0)
@@ -60,167 +76,157 @@ class TestAdd(TestCase):
         self.assertEqual(2, len(mem_profiler.memory_blocks))
 
         # assert that the first block is still the same
-        self.assertEqual(0, mem_profiler.memory_blocks[0].ptr)
-        self.assertEqual(False, mem_profiler.memory_blocks[0].free)
-        self.assertEqual(20, mem_profiler.memory_blocks[0].size)
-        self.assertEqual(None, mem_profiler.memory_blocks[0].next_free_ptr)
-        self.assertEqual([0] * 20, mem_profiler.memory_blocks[0].data)
-
-        # assert that the second block is as expected
-        self.assertEqual(32, mem_profiler.memory_blocks[1].ptr)
-        self.assertEqual(False, mem_profiler.memory_blocks[1].free)
-        self.assertEqual(5, mem_profiler.memory_blocks[1].size)
-        self.assertEqual(None, mem_profiler.memory_blocks[1].next_free_ptr)
-        self.assertEqual([0] * 5, mem_profiler.memory_blocks[1].data)
+        self.compare_mem_blocks(
+            mem_block=mem_profiler.memory_blocks[0],
+            expected_data=[0, False, 20, None, [0] * 20]
+        )
+        self.compare_mem_blocks(
+            mem_block=mem_profiler.memory_blocks[1],
+            expected_data=[32, False, 5, None, [0] * 5]
+        )
 
     def test_basic_free(self):
         malloc = self.instance.exports(self.store)["malloc"]
         one = malloc(self.store, 20)
-        two = malloc(self.store, 20)
-        three = malloc(self.store, 20)
-        four = malloc(self.store, 20)
-        five = malloc(self.store, 20)
-        six = malloc(self.store, 20)
-        seven = malloc(self.store, 20)
-        eight = malloc(self.store, 20)
+        two = malloc(self.store, 5)
+        three = malloc(self.store, 8)
+        four = malloc(self.store, 12)
+        five = malloc(self.store, 8)
+        six = malloc(self.store, 15)
+        seven = malloc(self.store, 7)
+        eight = malloc(self.store, 3)
 
-        self.print_mem()
+        self.assertEqual(0, one)
+        self.assertEqual(0 + 12 + 20, two)
+        self.assertEqual(two + 12 + 5, three)
+        self.assertEqual(three + 12 + 8, four)
+        self.assertEqual(four + 12 + 12, five)
+        self.assertEqual(five + 12 + 8, six)
+        self.assertEqual(six + 12 + 15, seven)
+        self.assertEqual(seven + 12 + 7, eight)
 
-        self.assertEqual(28, two)
-        self.assertEqual(84, four)
-        self.assertEqual(168, seven)
-        self.assertEqual(196, eight)
+        expected_mem = [
+            [0, False, 20, None, [0] * 20],
+            [32, False, 5, None, [0] * 5],
+            [49, False, 8, None, [0] * 8],
+            [69, False, 12, None, [0] * 12],
+            [93, False, 8, None, [0] * 8],
+            [113, False, 15, None, [0] * 15],
+            [140, False, 7, None, [0] * 7],
+            [159, False, 3, None, [0] * 3]
+        ]
+        self.profile_entire_memory(expected_mem=expected_mem)
 
+        # start freeing memory
         free_func = self.instance.exports(self.store)["free"]
+
         free_func(self.store, two)
-        self.print_mem()
+        expected_mem = [
+            [0, False, 20, None, [0] * 20],
+            [32, True, 5, None, [0] * 5],
+            [49, False, 8, None, [0] * 8],
+            [69, False, 12, None, [0] * 12],
+            [93, False, 8, None, [0] * 8],
+            [113, False, 15, None, [0] * 15],
+            [140, False, 7, None, [0] * 7],
+            [159, False, 3, None, [0] * 3]
+        ]
+        self.profile_entire_memory(expected_mem=expected_mem)
 
         free_func(self.store, four)
-        self.print_mem()
+        expected_mem = [
+            [0, False, 20, None, [0] * 20],
+            [32, True, 5, 69, [0] * 5],
+            [49, False, 8, None, [0] * 8],
+            [69, True, 12, None, [0] * 12],
+            [93, False, 8, None, [0] * 8],
+            [113, False, 15, None, [0] * 15],
+            [140, False, 7, None, [0] * 7],
+            [159, False, 3, None, [0] * 3]
+        ]
+        self.profile_entire_memory(expected_mem=expected_mem)
 
         free_func(self.store, seven)
-        self.print_mem()
+        expected_mem = [
+            [0, False, 20, None, [0] * 20],
+            [32, True, 5, 69, [0] * 5],
+            [49, False, 8, None, [0] * 8],
+            [69, True, 12, 140, [0] * 12],
+            [93, False, 8, None, [0] * 8],
+            [113, False, 15, None, [0] * 15],
+            [140, True, 7, None, [0] * 7],
+            [159, False, 3, None, [0] * 3]
+        ]
+        self.profile_entire_memory(expected_mem=expected_mem)
 
         free_func(self.store, eight)
-        mem_grid = self.get_mem_grid()
-        expected_grid = [
-            [1, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 84, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [1, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 168, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [1, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [1, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 196, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        expected_mem = [
+            [0, False, 20, None, [0] * 20],
+            [32, True, 5, 69, [0] * 5],
+            [49, False, 8, None, [0] * 8],
+            [69, True, 12, 140, [0] * 12],
+            [93, False, 8, None, [0] * 8],
+            [113, False, 15, None, [0] * 15],
+            [140, True, 7, 159, [0] * 7],
+            [159, True, 3, None, [0] * 3]
         ]
-        self.assertEqual(
-            expected_grid,
-            mem_grid
-        )
+        self.profile_entire_memory(expected_mem=expected_mem)
 
     def test_malloc_existing(self):
         # define a range of memory allocations
         malloc = self.instance.exports(self.store)["malloc"]
-        one = malloc(self.store, 20)  # 0 => 28 => 20
-        two = malloc(self.store, 5)  # 28 => 41 => 5
-        three = malloc(self.store, 20)  # 41 => 69 => 20
-        four = malloc(self.store, 20)  # 69 => 97 => 20
-        five = malloc(self.store, 3)  # 97 => 108 => 3
-        six = malloc(self.store, 20)  # 108 => 136 => 20
-        seven = malloc(self.store, 8)  # 136 => 152 => 8
-        eight = malloc(self.store, 20)  # 152 => 180 => 20
-        nine = malloc(self.store, 20)  # 180 => 208 => 20
+        one = malloc(self.store, 20)
+        two = malloc(self.store, 5)
+        three = malloc(self.store, 20)
+        four = malloc(self.store, 20)
+        five = malloc(self.store, 3)
+        six = malloc(self.store, 20)
+        seven = malloc(self.store, 8)
+        eight = malloc(self.store, 20)
+        nine = malloc(self.store, 20)
 
-        # assert that the start of the blocks make sense
-        self.assertEqual(0, one)
-        self.assertEqual(28, two)
-        self.assertEqual(41, three)
-        self.assertEqual(69, four)
-        self.assertEqual(97, five)
-        self.assertEqual(108, six)
-        self.assertEqual(136, seven)
-        self.assertEqual(152, eight)
-        self.assertEqual(180, nine)
-
-        # assert that the memory block is as expected
-        memory = self.instance.exports(self.store)["malloc_memory"]
-        allocated_block = memory.data_ptr(self.store)[0:nine + 28]
-        allocated_block = [
-            allocated_block[one:two],
-            allocated_block[two:three],
-            allocated_block[three:four],
-            allocated_block[four:five],
-            allocated_block[five:six],
-            allocated_block[six:seven],
-            allocated_block[seven:eight],
-            allocated_block[eight:nine],
-            allocated_block[nine: nine + 28]
+        expected_mem = [
+            [0, False, 20, None, [0] * 20],
+            [32, False, 5, None, [0] * 5],
+            [49, False, 20, None, [0] * 20],
+            [81, False, 20, None, [0] * 20],
+            [113, False, 3, None, [0] * 3],
+            [128, False, 20, None, [0] * 20],
+            [160, False, 8, None, [0] * 8],
+            [180, False, 20, None, [0] * 20],
+            [212, False, 20, None, [0] * 20]
         ]
-        expected_block = [
-            [1, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [1, 0, 0, 0, 255, 255, 255, 255, 5, 0, 0, 0, 0],
-            [1, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [1, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [1, 0, 0, 0, 255, 255, 255, 255, 3, 0, 0],
-            [1, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [1, 0, 0, 0, 255, 255, 255, 255, 8, 0, 0, 0, 0, 0, 0, 0],
-            [1, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [1, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        ]
-        self.assertEqual(
-            expected_block,
-            allocated_block
-        )
+        self.profile_entire_memory(expected_mem=expected_mem)
 
+        # free some memory up
         free_func = self.instance.exports(self.store)["free"]
-        free_func(self.store, two)     # ptr => 28 : size => 5
-        free_func(self.store, four)    # ptr => 69 : size => 20
-        free_func(self.store, five)    # ptr => 97 : size => 3
-        free_func(self.store, seven)   # ptr => 136: size => 8
-        free_func(self.store, nine)    # ptr => 180: size => 20
-        free_func(self.store, one)     # ptr => 0  : size => 20
+        free_func(self.store, two)
+        free_func(self.store, four)
+        free_func(self.store, five)
+        free_func(self.store, seven)
+        free_func(self.store, nine)
+        free_func(self.store, one)
 
-        memory = self.instance.exports(self.store)["malloc_memory"]
-        allocated_block = memory.data_ptr(self.store)[0:nine + 28]
-
-        expected_block = [
-            [0, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 69, 0, 0, 0, 5, 0, 0, 0, 0],
-            [1, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 97, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 136, 0, 0, 0, 3, 0, 0],
-            [1, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 180, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0],
-            [1, 0, 0, 0, 255, 255, 255, 255, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        expected_mem = [
+            [0, True, 20, None, [0] * 20],
+            [32, True, 5, 81, [0] * 5],
+            [49, False, 20, None, [0] * 20],
+            [81, True, 20, 113, [0] * 20],
+            [113, True, 3, 160, [0] * 3],
+            [128, False, 20, None, [0] * 20],
+            [160, True, 8, 212, [0] * 8],
+            [180, False, 20, None, [0] * 20],
+            [212, True, 20, 0, [0] * 20]
         ]
-        allocated_block = [
-            allocated_block[one:two],
-            allocated_block[two:three],
-            allocated_block[three:four],
-            allocated_block[four:five],
-            allocated_block[five:six],
-            allocated_block[six:seven],
-            allocated_block[seven:eight],
-            allocated_block[eight:nine],
-            allocated_block[nine: nine + 28]
-        ]
-        self.assertEqual(
-            expected_block,
-            allocated_block
-        )
+        self.profile_entire_memory(expected_mem=expected_mem)
 
-        memory = self.instance.exports(self.store)["malloc_memory"]
-        memory_page = memory.data_ptr(self.store)[0:64000]
-        print(allocated_block)
-        block = MemoryBlock(memory_page, 0)
-        print(block.check_free(memory_page[three:four]))
+        get_first_freed = self.instance.exports(self.store)["get_first_freed"]
+        first_freed = get_first_freed(self.store)
+        self.assertEqual(32, first_freed)
 
-        # # first realloc is going to be seven with a size of 8
-        # outcome = malloc(self.store, 1)
-        # print("here is the first realloc: ", outcome)
-        # get_first_freed = self.instance.exports(self.store)["get_first_freed"]
-        # print(get_first_freed(self.store))
+        # first realloc is going to be seven with a size of 8
+        outcome = malloc(self.store, 1)
+        print("here is the first realloc: ", outcome)
         #
         # is_greater_than = self.instance.exports(self.store)["is_greater_than"]
         # print(is_greater_than(self.store, 4, 3))
