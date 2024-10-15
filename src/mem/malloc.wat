@@ -19,6 +19,7 @@
   ;; [] implement the copy data over function
   ;; [] implement a request for more memory from the host function
   ;; [] implement memory fragmentation (2 => start block, 3 => a one of many middle block, 4 => end block)
+  ;; [] implement a read function (this will be needed for fragmented memory)
 
   ;; ====================== Header extraction functions ======================
 
