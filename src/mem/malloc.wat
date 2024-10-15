@@ -15,9 +15,10 @@
   ;; ================================ To Do =================================
 
   ;; [X] implement the free function
+  ;; [X] implement the realloc function
   ;; [] implement the copy data over function
-  ;; [] implement the realloc function
-  ;; [] build branch on malloc of existing memory block
+  ;; [] implement a request for more memory from the host function
+  ;; [] implement memory fragmentation (2 => start block, 3 => a one of many middle block, 4 => end block)
 
   ;; ====================== Header extraction functions ======================
 
@@ -28,6 +29,20 @@
     local.get $ptr
     i32.load
   )
+
+  ;; Marks the memory block as no longer free removing the pointer.
+  ;; param: ptr (i32) => the pointer to the memory block
+  (func $reclaim_mem_block (param $ptr i32)
+    local.get $ptr
+    i32.const 1
+    i32.store
+
+    i32.const 4
+    local.get $ptr
+    i32.add
+    i32.const -1
+    i32.store
+   )
 
   ;; Gets the pointer to the next free memory block.
   ;; param: ptr (i32) => the pointer to the memory block
@@ -50,6 +65,7 @@
   )
 
   ;; Gets the first freed pointer to the memory block.
+  ;; Notes => seems simple but this function is used for external debugging in the tests
   ;; result: i32 => the pointer to the first freed memory block
   (func $get_first_freed (result i32)
     global.get $first_freed
@@ -78,13 +94,6 @@
     local.get $next_free
     i32.store
   )
-
-
-  ;; ====================== Private Pointer Functions =======================
-
-
-  ;; TODO => implement the scan function to get a free memory block (relaxed scan and another function for strict scan)
-
 
 
   ;; ====================== Memory allocation functions ======================
@@ -147,6 +156,7 @@
   ;; Function to allocate memory (malloc)
   (func $malloc (param $size i32) (result i32)
     (local $cached_free i32)       ;; Local variable to hold the current free address
+    (local $trail_free i32)        ;; To lag one behind by one to enable a stiching of the memory blocks
 
     global.get $first_freed         ;; check to see if there is any freed memory
     i32.const -1                    ;; Load the constant -1 onto the stack
@@ -164,57 +174,65 @@
         ;; we have enough memory on the first go
         global.get $first_freed
         local.set $cached_free
+
+        ;; set the first freed up one
         local.get $cached_free
         call $get_next_free_mem
         global.set $first_freed
+
+        ;; set the pointer to free
+        local.get $cached_free
+        call $reclaim_mem_block
       else
         ;; we need to look for next free mem
         ;; move to next ptr for cached_free
         global.get $first_freed
-        call $get_next_free_mem
-        local.set $cached_free ;; now at 69
+        local.set $trail_free
 
-        ;; this is where we loop to check the (maybe break this out into a scan function)
-        ;; (loop $free_check
-        ;;   local.get $cached_free
-        ;;   call $get_mem_length
-        ;;   local.get $size
-        ;;   i32.ge_u
-        ;;   if
-        ;;     ;; we have enough mem
-        ;;     br 1
-        ;;   else
-        ;;     ;; move to the next ptr
-        ;;     local.get $cached_free
-        ;;     call $get_next_free_mem
-        ;;     local.set $cached_free
-        ;;     br 1
-        ;;   end
-        ;;   ;; ;; check to see if there is no next free mem
-        ;;   ;; local.get $cached_free
-        ;;   ;; call $get_next_free_mem
-        ;;   ;; i32.const -1
-        ;;   ;; i32.eq
-        ;;   ;; if
-        ;;   ;;   ;; there is no free mem left => $assign_fresh_memory => break
-        ;;   ;;   local.get $size
-        ;;   ;;   call $assign_fresh_memory
-        ;;   ;;   local.set $cached_free
-        ;;   ;;   br 1
-        ;;   ;; else
-        ;;   ;;   ;; check the free mem
-        ;;   ;;   local.get $size
-        ;;   ;;   local.get $cached_free
-        ;;   ;;   call $get_mem_length
-        ;;   ;;   i32.ge_u
-        ;;   ;;   if
-        ;;   ;;     ;; we can realloc mem
-        ;;   ;;     br 1
-        ;;   ;;   else
-        ;;   ;;     ;; we need to loop again
-        ;;   ;;   end
-        ;;   ;; end
-        ;; )
+        global.get $first_freed
+        call $get_next_free_mem
+        local.set $cached_free
+
+        (loop $free_scan
+
+          ;; Check the size of the memory block
+          local.get $cached_free
+          call $get_mem_length
+          local.get $size
+          i32.ge_u
+          if
+            ;; we have enough mem
+            local.get $trail_free
+            local.get $cached_free
+            call $get_next_free_mem
+            call $set_next_free_mem
+
+            local.get $cached_free
+            call $reclaim_mem_block
+            br 0
+          else
+            local.get $cached_free
+            local.set $trail_free
+
+            local.get $cached_free
+            call $get_next_free_mem
+            local.set $cached_free
+
+            ;; check if the next free memory is -1 => if so then we are at the end of the free memory
+            local.get $cached_free
+            i32.const -1
+            i32.eq
+            if
+              ;; assign fresh memory and exit
+              local.get $size
+              call $assign_fresh_memory
+              local.set $cached_free
+              br 0
+            end
+
+            br $free_scan
+          end
+        )
       end
     end
     local.get $cached_free

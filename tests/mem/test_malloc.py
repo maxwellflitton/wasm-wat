@@ -224,12 +224,136 @@ class TestAdd(TestCase):
         first_freed = get_first_freed(self.store)
         self.assertEqual(32, first_freed)
 
-        # first realloc is going to be seven with a size of 8
-        outcome = malloc(self.store, 1)
-        print("here is the first realloc: ", outcome)
-        #
-        # is_greater_than = self.instance.exports(self.store)["is_greater_than"]
-        # print(is_greater_than(self.store, 4, 3))
+        # get the first realloc
+        outcome = malloc(self.store, 4)
+        self.assertEqual(32, outcome)
+
+        expected_mem = [
+            [0, True, 20, None, [0] * 20],
+            [32, False, 5, None, [0] * 5],      # This block is now free thus the next free pointer is None
+            [49, False, 20, None, [0] * 20],
+            [81, True, 20, 113, [0] * 20],
+            [113, True, 3, 160, [0] * 3],
+            [128, False, 20, None, [0] * 20],
+            [160, True, 8, 212, [0] * 8],
+            [180, False, 20, None, [0] * 20],
+            [212, True, 20, 0, [0] * 20]
+        ]
+        self.profile_entire_memory(expected_mem=expected_mem)
+        first_freed = get_first_freed(self.store)
+        self.assertEqual(81, first_freed)
+
+        # call the next first realloc
+        outcome = malloc(self.store, 20)
+        self.assertEqual(81, outcome)
+
+        expected_mem = [
+            [0, True, 20, None, [0] * 20],
+            [32, False, 5, None, [0] * 5],
+            [49, False, 20, None, [0] * 20],
+            [81, False, 20, None, [0] * 20],
+            [113, True, 3, 160, [0] * 3],
+            [128, False, 20, None, [0] * 20],
+            [160, True, 8, 212, [0] * 8],
+            [180, False, 20, None, [0] * 20],
+            [212, True, 20, 0, [0] * 20]
+        ]
+        self.profile_entire_memory(expected_mem=expected_mem)
+        first_freed = get_first_freed(self.store)
+        self.assertEqual(113, first_freed)
+
+    def test_scan_and_stitching(self):
+        malloc = self.instance.exports(self.store)["malloc"]
+        one = malloc(self.store, 20)
+        two = malloc(self.store, 5)
+        three = malloc(self.store, 8)
+        four = malloc(self.store, 12)
+        five = malloc(self.store, 8)
+        six = malloc(self.store, 15)
+        seven = malloc(self.store, 7)
+        eight = malloc(self.store, 3)
+        nine = malloc(self.store, 20)
+        ten = malloc(self.store, 5)
+
+        expected_mem = [
+            [0, False, 20, None, [0] * 20],
+            [32, False, 5, None, [0] * 5],
+            [49, False, 8, None, [0] * 8],
+            [69, False, 12, None, [0] * 12],
+            [93, False, 8, None, [0] * 8],
+            [113, False, 15, None, [0] * 15],
+            [140, False, 7, None, [0] * 7],
+            [159, False, 3, None, [0] * 3],
+            [174, False, 20, None, [0] * 20],
+            [206, False, 5, None, [0] * 5]
+        ]
+        self.profile_entire_memory(expected_mem=expected_mem)
+
+        # free some memory up
+        free_func = self.instance.exports(self.store)["free"]
+        free_func(self.store, two)
+        free_func(self.store, four)
+        free_func(self.store, five)
+        free_func(self.store, seven)
+        free_func(self.store, nine)
+        free_func(self.store, one)
+
+        expected_mem = [
+            [0, True, 20, None, [0] * 20],
+            [32, True, 5, 69, [0] * 5],
+            [49, False, 8, None, [0] * 8],
+            [69, True, 12, 93, [0] * 12],
+            [93, True, 8, 140, [0] * 8],
+            [113, False, 15, None, [0] * 15],
+            [140, True, 7, 174, [0] * 7],
+            [159, False, 3, None, [0] * 3],
+            [174, True, 20, 0, [0] * 20],
+            [206, False, 5, None, [0] * 5]
+        ]
+        self.profile_entire_memory(expected_mem=expected_mem)
+
+        get_first_freed = self.instance.exports(self.store)["get_first_freed"]
+        first_freed = get_first_freed(self.store)
+        self.assertEqual(32, first_freed)
+
+        # we now have to scan for memory blocks that are free and stitch them together
+        outcome = malloc(self.store, 15)
+        self.assertEqual(174, outcome)
+
+        expected_mem = [
+            [0, True, 20, None, [0] * 20],
+            [32, True, 5, 69, [0] * 5],
+            [49, False, 8, None, [0] * 8],
+            [69, True, 12, 93, [0] * 12],
+            [93, True, 8, 140, [0] * 8],
+            [113, False, 15, None, [0] * 15],
+            [140, True, 7, 0, [0] * 7],
+            [159, False, 3, None, [0] * 3],
+            [174, False, 20, None, [0] * 20],
+            [206, False, 5, None, [0] * 5]
+        ]
+        self.profile_entire_memory(expected_mem=expected_mem)
+
+        # Assert that if the size is too big for anything a new block is created
+        outcome = malloc(self.store, 30)
+        self.assertEqual(223, outcome)
+
+        expected_mem = [
+            [0, True, 20, None, [0] * 20],
+            [32, True, 5, 69, [0] * 5],
+            [49, False, 8, None, [0] * 8],
+            [69, True, 12, 93, [0] * 12],
+            [93, True, 8, 140, [0] * 8],
+            [113, False, 15, None, [0] * 15],
+            [140, True, 7, 0, [0] * 7],
+            [159, False, 3, None, [0] * 3],
+            [174, False, 20, None, [0] * 20],
+            [206, False, 5, None, [0] * 5],
+            [223, False, 30, None, [0] * 30]
+        ]
+        self.profile_entire_memory(expected_mem=expected_mem)
+
+
 
 
 
