@@ -37,7 +37,7 @@ class TestAdd(TestCase):
             )
 
     def test_basic_malloc(self):
-        malloc = self.instance.exports(self.store)["malloc"]
+        malloc = self.instance.exports(self.store)["mem_malloc_malloc"]
         outcome = malloc(self.store, 20)
         self.assertEqual(0, outcome)
 
@@ -53,15 +53,15 @@ class TestAdd(TestCase):
             expected_data=[0, False, 20, None, [0] * 20]
         )
 
-        is_mem_free = self.instance.exports(self.store)["is_mem_free"]
+        is_mem_free = self.instance.exports(self.store)["mem_malloc_is_mem_free"]
         is_mem_free = is_mem_free(self.store, 0)
         self.assertEqual(1, is_mem_free)
 
-        get_next_free_mem = self.instance.exports(self.store)["get_next_free_mem"]
+        get_next_free_mem = self.instance.exports(self.store)["mem_malloc_get_next_free_mem"]
         get_next_free_mem = get_next_free_mem(self.store, 0)
         self.assertEqual(-1, get_next_free_mem)
 
-        get_mem_length = self.instance.exports(self.store)["get_mem_length"]
+        get_mem_length = self.instance.exports(self.store)["mem_malloc_get_mem_length"]
         get_mem_length = get_mem_length(self.store, 0)
         self.assertEqual(20, get_mem_length)
 
@@ -86,7 +86,7 @@ class TestAdd(TestCase):
         )
 
     def test_basic_free(self):
-        malloc = self.instance.exports(self.store)["malloc"]
+        malloc = self.instance.exports(self.store)["mem_malloc_malloc"]
         one = malloc(self.store, 20)
         two = malloc(self.store, 5)
         three = malloc(self.store, 8)
@@ -118,7 +118,7 @@ class TestAdd(TestCase):
         self.profile_entire_memory(expected_mem=expected_mem)
 
         # start freeing memory
-        free_func = self.instance.exports(self.store)["free"]
+        free_func = self.instance.exports(self.store)["mem_malloc_free"]
 
         free_func(self.store, two)
         expected_mem = [
@@ -174,7 +174,7 @@ class TestAdd(TestCase):
 
     def test_malloc_existing(self):
         # define a range of memory allocations
-        malloc = self.instance.exports(self.store)["malloc"]
+        malloc = self.instance.exports(self.store)["mem_malloc_malloc"]
         one = malloc(self.store, 20)
         two = malloc(self.store, 5)
         three = malloc(self.store, 20)
@@ -199,7 +199,7 @@ class TestAdd(TestCase):
         self.profile_entire_memory(expected_mem=expected_mem)
 
         # free some memory up
-        free_func = self.instance.exports(self.store)["free"]
+        free_func = self.instance.exports(self.store)["mem_malloc_free"]
         free_func(self.store, two)
         free_func(self.store, four)
         free_func(self.store, five)
@@ -220,7 +220,7 @@ class TestAdd(TestCase):
         ]
         self.profile_entire_memory(expected_mem=expected_mem)
 
-        get_first_freed = self.instance.exports(self.store)["get_first_freed"]
+        get_first_freed = self.instance.exports(self.store)["mem_malloc_get_first_freed"]
         first_freed = get_first_freed(self.store)
         self.assertEqual(32, first_freed)
 
@@ -263,7 +263,7 @@ class TestAdd(TestCase):
         self.assertEqual(113, first_freed)
 
     def test_scan_and_stitching(self):
-        malloc = self.instance.exports(self.store)["malloc"]
+        malloc = self.instance.exports(self.store)["mem_malloc_malloc"]
         one = malloc(self.store, 20)
         two = malloc(self.store, 5)
         three = malloc(self.store, 8)
@@ -290,7 +290,7 @@ class TestAdd(TestCase):
         self.profile_entire_memory(expected_mem=expected_mem)
 
         # free some memory up
-        free_func = self.instance.exports(self.store)["free"]
+        free_func = self.instance.exports(self.store)["mem_malloc_free"]
         free_func(self.store, two)
         free_func(self.store, four)
         free_func(self.store, five)
@@ -312,7 +312,7 @@ class TestAdd(TestCase):
         ]
         self.profile_entire_memory(expected_mem=expected_mem)
 
-        get_first_freed = self.instance.exports(self.store)["get_first_freed"]
+        get_first_freed = self.instance.exports(self.store)["mem_malloc_get_first_freed"]
         first_freed = get_first_freed(self.store)
         self.assertEqual(32, first_freed)
 
@@ -352,9 +352,6 @@ class TestAdd(TestCase):
             [223, False, 30, None, [0] * 30]
         ]
         self.profile_entire_memory(expected_mem=expected_mem)
-
-
-
 
 
 if __name__ == '__main__':

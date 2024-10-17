@@ -3,6 +3,13 @@
     ;; The function signature for fd_write is:
     ;; (File Descriptor, *iovs, iovs_len, *nwritten) -> Returns 0 on success, nonzero on error
     (import "wasi_snapshot_preview1" "fd_write" (func $fd_write (param i32 i32 i32 i32) (result i32)))
+;;    https://github.com/WebAssembly/WASI/blob/main/legacy/preview1/docs.md#fd_read
+
+;;    (import "wasi_snapshot_preview1" "path_open" (func (param i32 i32 i32 i32 i32)))
+;;    (import "wasi_snapshot_preview1" "fd_read" (func (param i32 i32 i32 i32 i32 i32) (result i32)))
+;;    (import "wasi_snapshot_preview1" "fd_close" (func (param i32 i32 i32 i32) (result i32)))
+;;    (import "wasi_snapshot_preview1" "proc_exit" (func (param i32 i32 i32 i32)))
+
     (import "utils_add" "utils_add_add" (func $imported_add (param i32 i32) (result i32)))
 
     (memory 1)
